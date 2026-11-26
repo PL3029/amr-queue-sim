@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จำลองการจัดคิว AMR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600&family=Inter:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: control-room console, calm and exact, a tool that opens already mid-run
+   IDEA: a fleet dispatcher's floor-plan screen with a live dispatch log
+   PICTURE: the warehouse floor map with robots driving Manhattan routes to stations
+   COLOUR and TYPE: steel panel, black ink, white panes, alarm red for failure and urgent; Inter Tight + Sarabun
+   LAYOUT: controls on top, map dominant at left, robot strips and log beside, comparison table below */
+:root{color-scheme:light dark;--bg:light-dark(#d5dbe0,#16191c);--pane:light-dark(#ffffff,#1f2327);--ink:light-dark(#0b0d0f,#eef1f3);--mute:light-dark(#4a535b,#a3adb5);--line:light-dark(#b9c2c9,#343a40);--floor:light-dark(#f4f6f7,#1b1f22);--grid:light-dark(#e3e8eb,#262b30);--red:#e8251a;--r1:light-dark(#1b5fd6,#6fa2ff);--r2:light-dark(#0f7d60,#47c9a2);--r3:light-dark(#a35a05,#f0a64a);--r4:light-dark(#7a3fc4,#c39bff);--wall:light-dark(#c5cdd3,#3a4249);--r5:light-dark(#4f5b66,#c3ccd4);--sel:light-dark(#0b0d0f,#eef1f3);--onsel:light-dark(#ffffff,#0b0d0f)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 'Inter','Sarabun',system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:'Inter Tight','Sarabun',sans-serif;font-weight:600;margin:0;text-wrap:balance}
+h1{font-size:clamp(28px,4.4vw,44px);line-height:1.08}
+h2{font-size:20px;line-height:1.2;margin-bottom:12px}
+.band{padding:clamp(20px,3.5vw,44px) max(4vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.lede{color:var(--mute);margin:8px 0 0;max-width:68ch}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:22px}
+.lab{font-size:13px;color:var(--mute);margin:0 0 6px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+button,select{font:inherit;font-size:15px;color:var(--ink);background:var(--pane);border:1px solid var(--line);border-radius:8px;min-height:44px;padding:0 14px;cursor:pointer}
+button[aria-pressed=true]{background:var(--sel);color:var(--onsel);border-color:var(--sel)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--r1);outline-offset:2px}
+.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-top:18px}
+.pane{background:var(--pane);border:1px solid var(--line);border-radius:12px;padding:14px}
+.map svg{display:block;width:100%;height:auto}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.clock{margin-left:auto;font-family:'Inter Tight',sans-serif;font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.clock small{font-size:14px;color:var(--mute);font-weight:500}
+.rob{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.rob:last-child{border-bottom:0}
+.dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;font-size:13px}
+.st{font-size:14px}.num{font-size:13px;color:var(--mute);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.soc{grid-column:2/4;height:6px;background:var(--grid);border-radius:3px;overflow:hidden}.soc i{display:block;height:100%}
+.log{list-style:none;margin:0;padding:0;max-height:300px;overflow-y:auto;font-size:14px}
+.log li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--grid)}
+.log b{font-weight:500;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.log .bad{color:var(--red)}
+.story{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px}
+.story p{margin:0}
+.look{border-left:4px solid var(--red);border-radius:0;padding-left:12px}
+.w{display:grid;grid-template-columns:90px minmax(0,1fr) 78px;gap:10px;align-items:center;margin:6px 0}
+input[type=range]{width:100%;height:44px;accent-color:var(--r1)}
+.w output{font-variant-numeric:tabular-nums;text-align:right}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:15px}
+th,td{padding:10px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{font-size:13px;color:var(--mute);font-weight:500}
+td.best{font-weight:600}td.best::after{content:' ●';color:var(--r2);font-size:11px}
+td.fail{color:var(--red);font-weight:600}
+tr.cur td{background:var(--grid)}
+.note{font-size:14px;color:var(--mute)}
+.note li{margin:3px 0}
+.mc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:20px;margin-top:8px}
+.mrow{display:grid;grid-template-columns:120px minmax(0,1fr) 92px;gap:8px;align-items:center;font-size:14px;margin:4px 0}
+.mrow .tr{height:14px;background:var(--grid);border-radius:3px;overflow:hidden}.mrow .tr i{display:block;height:100%;background:var(--ink)}
+.mrow.fifo .tr i{background:var(--mute)}.mrow .v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.metric{margin:0 0 14px}.metric h3{font-size:15px;margin:0 0 4px}
+.prog{height:6px;background:var(--grid);border-radius:3px;overflow:hidden;margin:10px 0}.prog i{display:block;height:100%;width:0;background:var(--r1)}
+.run{background:var(--sel);color:var(--onsel);border-color:var(--sel)}
+@media(max-width:860px){.mc{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:860px){.main{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.mapwrap{overflow-x:auto}.mapwrap svg{min-width:600px}.clock{font-size:24px;margin-left:0;width:100%}button{padding:0 11px;font-size:14px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="band"><div class="wrap">
+<h1>จำลองการจัดคิวหุ่นยนต์ AMR</h1>
+<p class="lede">เปรียบเทียบการแจกงาน 4 วิธี กับสถานการณ์ทดสอบ 4 แบบ และแผนที่สถานที่จริง 5 แบบ ได้แก่ ร้านค้า ห้าง โรงแรม โกดัง และโรงงาน กดเล่นเพื่อดูหุ่นวิ่งอ้อมสิ่งกีดขวางไปรับงาน แล้วดูเหตุผลที่ระบบเลือกหุ่นแต่ละตัวได้ในบันทึกด้านขวา</p>
+<div class="ctl">
+<div><p class="lab">สถานการณ์</p><div class="seg" id="scBtns"></div></div>
+<div><p class="lab">วิธีแจกงาน</p><div class="seg" id="stBtns"></div></div>
+<div style="grid-column:1/-1"><p class="lab">แผนที่สถานที่ (ใช้กับ Monte Carlo และรอบสุ่ม)</p><div class="seg" id="mapBtns"></div></div>
+</div>
+<div class="main">
+<section class="pane map" aria-label="แผนที่จำลอง">
+<div class="mapwrap"><svg id="map" viewBox="-2 -3 44 29" role="img" aria-label="แผนที่จำลอง แสดงจุดงาน แท่นชาร์จ สิ่งกีดขวาง และตำแหน่งหุ่นยนต์"></svg></div>
+<div class="bar">
+<button id="play" aria-pressed="false">▶ เล่น</button>
+<button id="stepB">ทีละขั้น</button>
+<button id="reset">เริ่มใหม่</button>
+<label class="lab" for="spd" style="margin:0">ความเร็ว</label>
+<select id="spd"><option value="4">4×</option><option value="8" selected>8×</option><option value="16">16×</option></select>
+<span class="clock" id="clock">0 <small>วินาที</small></span>
+</div>
+</section>
+<section class="pane" aria-label="สถานะหุ่นและบันทึก">
+<h2>หุ่นยนต์</h2>
+<div id="robs"></div>
+<h2 style="margin-top:16px">บันทึกการแจกงาน</h2>
+<ul class="log" id="log"></ul>
+</section>
+</div>
+<div class="story">
+<div class="pane"><h2 id="scName"></h2><p id="scDesc"></p><p class="note" id="scLeg" style="margin:8px 0 0"></p></div>
+<div class="pane"><h2>สิ่งที่ควรสังเกต</h2><p class="look" id="scLook"></p></div>
+</div>
+</div></header>
+
+<section class="band" id="montecarlo"><div class="wrap">
+<h2 style="font-size:clamp(24px,3vw,32px)">Monte Carlo: สุ่มงานหลายรอบแล้วเทียบค่าเฉลี่ย</h2>
+<p class="lede" style="margin:0 0 6px">แต่ละรอบสุ่มตำแหน่งหุ่น แบตเริ่มต้น และงานที่เข้ามาแบบสุ่มบนแผนที่ที่เลือกด้านบน แล้วนำชุดข้อมูลเดียวกันไปรันกับทั้ง 4 วิธี ทุกวิธีจึงได้รับงานชุดเดียวกัน โหมดนี้เปิดใช้แท่นชาร์จ หุ่นจะไปแท่นที่ใกล้ที่สุด แล้วชาร์จเมื่อแบตต่ำกว่า 40% หรือเมื่อแบตไม่พอรับงานใดที่รออยู่เลย</p>
+<div class="mc">
+<div class="pane">
+<div class="w"><label for="mRuns">จำนวนรอบ</label><input type="range" id="mRuns" min="10" max="100" step="10" value="50"><output id="vRuns">50</output></div>
+<div class="w"><label for="mN">งานต่อรอบ</label><input type="range" id="mN" min="20" max="200" step="10" value="100"><output id="vN">100</output></div>
+<div class="w"><label for="mGap">งานเข้าทุก ๆ</label><input type="range" id="mGap" min="8" max="90" step="1" value="15"><output id="vGap">15 วิ</output></div>
+<div class="w"><label for="mUrg">งานด่วน</label><input type="range" id="mUrg" min="0" max="50" step="5" value="15"><output id="vUrg">15%</output></div>
+<div class="w"><label for="mR">จำนวนหุ่น</label><input type="range" id="mR" min="2" max="6" step="1" value="3"><output id="vR">3 ตัว</output></div>
+<div class="w"><label for="mC">แท่นชาร์จ</label><input type="range" id="mC" min="1" max="6" step="1" value="1"><output id="vC">1 แท่น</output></div>
+<div class="w"><label for="mUse">ใช้แบต</label><input type="range" id="mUse" min="0.1" max="0.5" step="0.05" value="0.2"><output id="vUse">0.20%/ม.</output></div>
+<div class="bar"><button class="run" id="mGo">รันการจำลอง</button><button id="mOpen">ดูรอบแรกบนแผนที่</button></div>
+<div class="prog"><i id="mProg"></i></div>
+<p class="note" id="mStat" style="margin:0">ระยะห่างระหว่างงานเป็นค่าเฉลี่ย (สุ่มแบบ Exponential) · ใช้น้ำหนัก Cost function จากตัวเลื่อนด้านล่าง</p>
+</div>
+<div class="pane" id="mOut" aria-live="polite"></div>
+</div>
+<h2 style="font-size:clamp(22px,2.6vw,28px);margin-top:28px">คุ้มไหม: เพิ่มหุ่น เพิ่มแท่นชาร์จ หรือให้แท่นเท่าจำนวนหุ่น</h2>
+<p class="lede" style="margin:0 0 10px">รัน 9 แบบ (หุ่น 3, 4, 5 ตัว × แท่นชาร์จ 1 แท่น, 2 แท่น และเท่าจำนวนหุ่น) ด้วยชุดงานเดียวกัน ใช้จำนวนรอบ จำนวนงาน ความถี่งาน สัดส่วนงานด่วน และการใช้แบตจากแผงด้านบน หุ่นตัวที่ 1–3 อยู่ตำแหน่งเดิมทุกแบบ ส่วนตัวที่เพิ่มเข้ามาจะสุ่มตำแหน่งแยก</p>
+<div class="bar" style="margin:0 0 10px"><label class="lab" for="sMeth" style="margin:0">วิธีแจกงาน</label><select id="sMeth"></select><button class="run" id="sGo">เทียบ 9 แบบ</button><span class="note" id="sStat"></span></div>
+<div class="pane"><div class="scroll"><table id="sTab"><thead><tr><th>หุ่น / แท่นชาร์จ</th><th>รอเฉลี่ย (วิ)</th><th>ลดลงจาก 3/1</th><th>รอ P95 (วิ)</th><th>รองานด่วน (วิ)</th><th>หุ่นทำงาน</th><th>เวลาไปและรอชาร์จ</th><th>แท่นชาร์จถูกใช้</th></tr></thead><tbody></tbody></table></div>
+<p class="note" id="sNote" style="margin:10px 0 0"></p></div>
+</div></section>
+
+<section class="band" style="background:var(--pane)"><div class="wrap">
+<h2>ผลของทุกวิธีในสถานการณ์นี้</h2>
+<p class="note" style="margin:0 0 10px">ตัวเลขยิ่งต่ำยิ่งดี ● คือค่าดีที่สุดในคอลัมน์ แถวที่มีพื้นสีคือวิธีที่กำลังดูอยู่ "รอ" นับตั้งแต่งานเข้าคิวจนหุ่นไปถึงจุดงาน</p>
+<div class="scroll"><table id="cmp"><thead><tr><th>วิธี</th><th>ระยะรวม (ม.)</th><th>รอเฉลี่ย (วิ)</th><th>รอสูงสุด (วิ)</th><th>รองานด่วน (วิ)</th><th>งานล้มเหลว</th><th>เสร็จทุกงาน (วิ)</th></tr></thead><tbody></tbody></table></div>
+<div class="story">
+<div><h2>น้ำหนัก Cost function</h2>
+<p class="note" style="margin:0 0 6px">ใช้เฉพาะวิธี Cost function · ระบบปรับให้รวมเป็น 1 อัตโนมัติ</p>
+<div class="w"><label for="w0">ETA</label><input type="range" id="w0" min="0" max="100" step="1" value="60"><output id="o0">0.60</output></div>
+<div class="w"><label for="w1">แบต</label><input type="range" id="w1" min="0" max="100" step="1" value="30"><output id="o1">0.30</output></div>
+<div class="w"><label for="w2">เวลาว่าง</label><input type="range" id="w2" min="0" max="100" step="1" value="10"><output id="o2">0.10</output></div>
+<p class="note" id="wErr" style="color:var(--red);min-height:22px;margin:4px 0 0"></p>
+</div>
+<div><h2>สมมติฐานของแบบจำลอง</h2>
+<ul class="note" style="padding-left:18px;margin:0">
+<li>หุ่นวิ่ง 1 ม./วินาที ตามทางเดินแนวตั้งฉาก (ระยะ Manhattan คือแกน X แล้วแกน Y)</li>
+<li>ใช้แบต 0.5% ต่อเมตร ทำงานที่จุดละ 10 วินาที</li>
+<li>Hard constraint: แบตต้องพอไปจุดงานแล้วกลับแท่นชาร์จ โดยยังเหลืออย่างน้อย 10% (ทุกวิธียกเว้น FIFO + ใกล้สุด)</li>
+<li>กฎทีละขั้น: ETA ต่างกันไม่เกิน 5 วินาทีถือว่าเสมอ → แบต → เวลาว่าง → รหัสหุ่น</li>
+<li>FIFO เรียงคิวตามเวลาเข้า ส่วนอีก 3 วิธีเรียงตาม Priority ก่อน</li>
+<li>Hungarian ในหน้านี้ใช้การไล่ครบทุกการจับคู่ (Brute force) ซึ่งได้คำตอบเท่ากัน และเร็วพอสำหรับหุ่นไม่เกิน 6 ตัว</li>
+<li>Monte Carlo: ในพื้นที่โล่ง แท่นชาร์จแท่นแรกอยู่มุมซ้ายบน แท่นที่ 2 อยู่ขอบขวากลาง (ระหว่าง A กับ B) แท่นที่ 3–6 กระจายตามขอบ แผนที่อื่นวางแท่นตามขอบอาคาร หุ่นใช้แท่นร่วมกันและไปแท่นที่ใกล้ที่สุดเสมอ ถ้าแท่นไม่ว่างจะต่อคิว ชาร์จ 1% ต่อวินาทีจนถึง 95% Hard constraint นับระยะกลับไปแท่นที่ใกล้จุดงานที่สุด ส่วนค่าใช้แบตปรับได้ (สถานการณ์ 1–4 ใช้ 0.5% ต่อเมตรและไม่มีการชาร์จ)</li>
+<li>แผนที่สถานที่: กริด 1 ม. หุ่นเดินทางตามเส้นทางสั้นที่สุดที่อ้อมผนังและชั้นวาง (BFS คือการค้นหาแบบกระจายทีละชั้น) งานส่วนใหญ่เป็นแบบรับของที่จุดหนึ่งไปส่งอีกจุด ใช้เวลาที่จุดละ 10 วินาที และนับเวลารอจนหุ่นถึงจุดรับ</li>
+<li>ยังไม่ได้จำลองการชนหรือการหลีกทางกันของหุ่น หุ่นวิ่งผ่านกันได้ในทางแคบ และโรงแรมมีชั้นเดียว ยังไม่ได้จำลองการรอลิฟต์</li>
+<li>ข้อมูลทั้งหมดเป็นตัวอย่างสมมติ ไม่ใช่สเปกของหุ่นรุ่นใด และผังไม่ได้มาจากสถานที่จริงแห่งใด</li>
+</ul></div>
+</div>
+</div></section>
+<script>
+{
+const SIM={SPEED:1,USE:0.5,RESERVE:10,SERVICE:10,TOL:5,DT:0.5,TMAX:600,CHG_LOW:40,CHG_FULL:95,CHG_RATE:1};
+const SCEN=[
+ {id:'s1',name:'งานเดียว หุ่นว่าง 3 ตัว',short:'งานเดียว',
+  desc:'มีงานไปพื้นที่ A งานเดียว หุ่น R1, R2, R3 รุ่นเดียวกันว่างพร้อมกัน R1 กับ R2 อยู่ห่างพอ ๆ กัน (40 กับ 42 ม.)',
+  look:'FIFO และกฎทีละขั้นเลือก R1 เพราะ ETA ต่างกันไม่เกิน 5 วินาทีจึงไปตัดสินด้วยแบต แต่ Cost function เลือก R2 เพราะ R2 ว่างนานที่สุด ลองลดน้ำหนักเวลาว่างเหลือ 0 แล้วดูว่าผลเปลี่ยนไหม',
+  robots:[{id:'R1',x:6,y:12,soc:80,idle:120},{id:'R2',x:6,y:10,soc:65,idle:600},{id:'R3',x:2,y:0,soc:90,idle:300}],
+  tasks:[{id:'T1',area:'A',at:0,pri:1}]},
+ {id:'s2',name:'สองงานพร้อมกัน',short:'สองงาน',
+  desc:'งาน T1 ไปพื้นที่ C และ T2 ไปพื้นที่ A เข้ามาพร้อมกัน R1 อยู่ใกล้ทั้งสองจุด ส่วน R2 อยู่ใกล้แค่ C',
+  look:'วิธีที่เลือกทีละงาน (FIFO, กฎ, Cost) ให้ R1 คว้า T1 ที่ใกล้สุดไปก่อน R2 จึงต้องวิ่งไกล 40 ม. ส่วน Hungarian จับคู่ทั้งชุดพร้อมกัน ระยะรวมและเวลารอสูงสุดจึงต่ำกว่า',
+  robots:[{id:'R1',x:26,y:12,soc:80,idle:60},{id:'R2',x:6,y:12,soc:80,idle:60}],
+  tasks:[{id:'T1',area:'C',at:0,pri:1},{id:'T2',area:'A',at:0,pri:1}]},
+ {id:'s3',name:'หุ่นที่ใกล้สุดแบตต่ำ',short:'แบตต่ำ',
+  desc:'งานไปพื้นที่ A หุ่นที่ใกล้ที่สุดคือ R1 (18 ม.) แต่เหลือแบต 8% ต้องใช้ 9% แค่ไปให้ถึง',
+  look:'FIFO + ใกล้สุดไม่ได้ตรวจแบต R1 จึงแบตหมดกลางทางและงานล้มเหลว อีก 3 วิธีใช้ Hard constraint (แบตต้องพอไปทำงานแล้วกลับแท่นชาร์จ โดยยังเหลือ 10%) จึงข้าม R1 ไปเลือก R3',
+  robots:[{id:'R1',x:20,y:20,soc:8,idle:60},{id:'R2',x:6,y:12,soc:90,idle:60},{id:'R3',x:30,y:6,soc:60,idle:60}],
+  tasks:[{id:'T1',area:'A',at:0,pri:1}]},
+ {id:'s4',name:'งานด่วนแทรกคิว',short:'งานด่วน',
+  desc:'หุ่น 2 ตัวรับงาน T1, T2 ไปแล้ว ระหว่างนั้นมี T3 (ปกติ) เข้ามาที่วินาที 2 และ T4 (ด่วน) เข้ามาที่วินาที 4',
+  look:'FIFO แจก T3 ก่อนเพราะมาก่อน งานด่วน T4 จึงรอนาน ส่วนวิธีที่เรียงคิวตาม Priority แจก T4 ก่อนทันทีที่มีหุ่นว่าง ดูคอลัมน์ "รองานด่วน"',
+  robots:[{id:'R1',x:2,y:20,soc:90,idle:60},{id:'R2',x:2,y:4,soc:90,idle:60}],
+  tasks:[{id:'T1',area:'A',at:0,pri:1},{id:'T2',area:'B',at:0,pri:1},{id:'T3',area:'C',at:2,pri:1},{id:'T4',area:'D',at:4,pri:2}]}
+];
+
+const rooms=[101,102,103,104,105,106,107,108,109,110,111,112];
+const MAPS={
+ plain:{id:'plain',name:'พื้นที่โล่ง',short:'โล่ง',w:40,h:24,gap:15,walls:[],zones:[],
+  st:{A:{x:38,y:20,n:'จุด A'},B:{x:38,y:4,n:'จุด B'},C:{x:20,y:12,n:'จุด C'},D:{x:2,y:20,n:'จุด D'}},
+  ch:[{x:2,y:2},{x:38,y:12},{x:20,y:22},{x:20,y:2},{x:2,y:12},{x:30,y:22}],flows:null,
+  desc:'พื้นที่โล่ง 40 × 24 ม. ไม่มีสิ่งกีดขวาง งานเป็นแบบไปจุดเดียว ใช้กับสถานการณ์ 1–4',look:'ใช้เป็นฐานเทียบกับแผนที่สถานที่จริง'},
+ retail:{id:'retail',name:'ร้านค้า / ซูเปอร์มาร์เก็ต',short:'ร้านค้า',w:36,h:22,gap:40,
+  walls:[[6,4,2,11],[12,4,2,11],[18,4,2,11],[24,4,2,11],[29,0,1,8],[29,12,1,10],[4,18,3,1],[11,18,3,1]],
+  zones:[{x:33,y:9,t:'คลังหลังร้าน'},{x:16,y:2,t:'ชั้นวางสินค้า'},{x:4.5,y:21.6,t:'แคชเชียร์'}],
+  st:{ST:{x:34,y:4,n:'คลังหลังร้าน'},L1:{x:10,y:9,n:'ช่องทางเดิน 1'},L2:{x:16,y:9,n:'ช่องทางเดิน 2'},L3:{x:22,y:9,n:'ช่องทางเดิน 3'},L4:{x:27,y:9,n:'ช่องทางเดิน 4'},K:{x:9,y:20,n:'จุดแคชเชียร์'}},
+  ch:[{x:34,y:20},{x:2,y:2},{x:20,y:20},{x:34,y:12},{x:2,y:11},{x:27,y:20}],
+  flows:[['ST','L1',3,'เติมสินค้า'],['ST','L2',3,'เติมสินค้า'],['ST','L3',3,'เติมสินค้า'],['ST','L4',3,'เติมสินค้า'],['K','ST',2,'เก็บตะกร้า/ของคืน'],['L1',null,1,'สแกนชั้นวาง'],['L3',null,1,'สแกนชั้นวาง']],
+  desc:'ร้านขนาด 36 × 22 ม. ชั้นวาง 4 แถว ผนังกั้นคลังหลังร้านมีช่องประตูกลาง งานส่วนใหญ่คือขนสินค้าจากคลังไปเติมชั้นวาง',
+  look:'ทุกงานเติมสินค้าต้องผ่านประตูคลังช่องเดียว ลองเพิ่มหุ่นแล้วดูว่าเวลารอลดลงช้ากว่าพื้นที่โล่งหรือไม่'},
+ mall:{id:'mall',name:'ห้างสรรพสินค้า',short:'ห้าง',w:48,h:28,gap:40,
+  walls:[[2,0,8,5],[12,0,8,5],[28,0,8,5],[38,0,8,5],[2,23,8,5],[12,23,8,5],[28,23,8,5],[38,23,8,5],[18,10,12,8]],
+  zones:[{x:24,y:14.4,t:'โถงกลาง'},{x:6,y:2.6,t:'ร้าน'},{x:42,y:25.6,t:'ร้าน'}],
+  st:{S1:{x:6,y:6,n:'ร้าน 1'},S2:{x:16,y:6,n:'ร้าน 2'},S3:{x:32,y:6,n:'ร้าน 3'},S4:{x:42,y:6,n:'ร้าน 4'},S5:{x:6,y:22,n:'ร้าน 5'},S6:{x:16,y:22,n:'ร้าน 6'},S7:{x:32,y:22,n:'ร้าน 7'},S8:{x:42,y:22,n:'ร้าน 8'},
+   DK:{x:47,y:14,n:'ท่าขนสินค้า'},IN:{x:14,y:14,n:'จุดประชาสัมพันธ์'},FC:{x:24,y:2,n:'ศูนย์อาหาร'}},
+  ch:[{x:47,y:8},{x:1,y:14},{x:24,y:27},{x:47,y:20},{x:21,y:1},{x:1,y:8}],
+  flows:[['DK','S1',2,'ส่งสินค้า'],['DK','S2',2,'ส่งสินค้า'],['DK','S3',2,'ส่งสินค้า'],['DK','S4',2,'ส่งสินค้า'],['DK','S5',2,'ส่งสินค้า'],['DK','S6',2,'ส่งสินค้า'],['DK','S7',2,'ส่งสินค้า'],['DK','S8',2,'ส่งสินค้า'],
+   ['S2','DK',1,'ขยะ/ของคืน'],['S7','DK',1,'ขยะ/ของคืน'],['IN','S1',1,'นำทางลูกค้า'],['IN','S4',1,'นำทางลูกค้า'],['IN','S5',1,'นำทางลูกค้า'],['IN','S8',1,'นำทางลูกค้า'],['FC',null,2,'ทำความสะอาด']],
+  desc:'ห้าง 48 × 28 ม. ร้านเรียงสองฝั่ง มีโถงกลางที่หุ่นต้องวิ่งอ้อม ท่าขนสินค้าอยู่ทางขวา งานหลักคือส่งสินค้าเข้าร้าน รองลงมาคือนำทางลูกค้าจากจุดประชาสัมพันธ์',
+  look:'ร้านฝั่งซ้าย (1, 2, 5, 6) อยู่ไกลท่าขนสินค้า งานไปร้านเหล่านี้จึงใช้เวลานาน ดูว่าหุ่นต้องวิ่งอ้อมโถงกลางแค่ไหน'},
+ hotel:{id:'hotel',name:'โรงแรม (1 ชั้น)',short:'โรงแรม',w:44,h:24,gap:40,
+  walls:[0,1,2,3,4,5].flatMap(i=>[[7+i*6,0,5,9],[7+i*6,15,5,9]]),
+  zones:[{x:24,y:12.4,t:'ทางเดิน'}],
+  st:Object.assign({KT:{x:2,y:3,n:'ครัว'},LD:{x:2,y:21,n:'ห้องซักรีด'},FD:{x:3,y:12,n:'ล็อบบี้/เคาน์เตอร์'},LF:{x:43,y:12,n:'ลิฟต์ (ไปชั้นอื่น)'}},
+   Object.fromEntries(rooms.map((n,i)=>[String(n),{x:9+(i%6)*6,y:i<6?10:14,n:'ห้อง '+n}]))),
+  ch:[{x:0,y:8},{x:44,y:8},{x:0,y:16},{x:44,y:16},{x:5,y:0},{x:5,y:24}],
+  flows:[...rooms.map(n=>['KT',String(n),1,'รูมเซอร์วิส']),...rooms.map(n=>['FD',String(n),1,'ส่งของ/สัมภาระ']),...rooms.filter((n,i)=>i%2===0).map(n=>[String(n),'LD',1,'เก็บผ้าไปซัก']),['FD','LF',2,'ส่งของไปชั้นอื่น']],
+  desc:'ชั้นห้องพัก 44 × 24 ม. ห้อง 12 ห้องอยู่สองฝั่งของทางเดินกลาง ครัว ซักรีด และล็อบบี้อยู่ด้านซ้าย ลิฟต์อยู่ปลายทางเดินด้านขวา แบบจำลองนี้มีชั้นเดียว ยังไม่ได้จำลองการรอลิฟต์',
+  look:'หุ่นทุกตัวต้องใช้ทางเดินเส้นเดียว ห้องที่อยู่ปลายทางเดิน (106, 112) จึงไกลจากครัวที่สุด แบบจำลองนี้ยังไม่ได้ห้ามหุ่นวิ่งสวนกันในทางแคบ'},
+ wh:{id:'wh',name:'โกดังสินค้า',short:'โกดัง',w:48,h:28,gap:60,
+  walls:[[6,3,32,2],[6,8,32,2],[6,13,32,2],[6,18,32,2],[6,23,32,2]],
+  zones:[{x:22,y:1.6,t:'ชั้นวางสินค้า (Rack)'},{x:44,y:14.4,t:'ทางขนถ่าย'}],
+  st:{IB:{x:47,y:2,n:'ท่ารับสินค้าเข้า'},PK:{x:47,y:26,n:'จุดแพ็ก/ส่งออก'},P1:{x:14,y:6,n:'จุดหยิบ 1'},P2:{x:30,y:6,n:'จุดหยิบ 2'},P3:{x:14,y:11,n:'จุดหยิบ 3'},P4:{x:30,y:11,n:'จุดหยิบ 4'},
+   P5:{x:14,y:16,n:'จุดหยิบ 5'},P6:{x:30,y:16,n:'จุดหยิบ 6'},P7:{x:14,y:21,n:'จุดหยิบ 7'},P8:{x:30,y:21,n:'จุดหยิบ 8'}},
+  ch:[{x:1,y:1},{x:1,y:27},{x:1,y:14},{x:44,y:14},{x:20,y:27},{x:20,y:0}],
+  flows:[...[1,2,3,4,5,6,7,8].map(i=>['IB','P'+i,1,'จัดเก็บเข้าชั้น']),...[1,2,3,4,5,6,7,8].map(i=>['P'+i,'PK',2,'หยิบไปแพ็ก'])],
+  desc:'โกดัง 48 × 28 ม. ชั้นวาง 5 แถวยาว 32 ม. ทางเดินระหว่างชั้นกว้าง 2 ม. ทางขนถ่ายอยู่ด้านขวา งาน 2 ใน 3 คือหยิบสินค้าไปจุดแพ็ก ที่เหลือคือจัดเก็บสินค้าเข้าชั้น',
+  look:'จุดหยิบฝั่งซ้าย (1, 3, 5, 7) อยู่ลึกเข้าไปในแถวชั้นวาง เส้นทางยาวกว่าฝั่งขวาเกือบเท่าตัว ลองเทียบกับกรณีย้ายสินค้าขายดีมาไว้ฝั่งขวา'},
+ fac:{id:'fac',name:'โรงงานผลิต',short:'โรงงาน',w:48,h:28,gap:30,
+  walls:[[10,4,26,3],[10,12,26,3],[10,20,26,3],[40,0,1,10],[40,18,1,10]],
+  zones:[{x:23,y:5.9,t:'สายการผลิต 1'},{x:23,y:13.9,t:'สายการผลิต 2'},{x:23,y:21.9,t:'สายการผลิต 3'},{x:44.5,y:5,t:'คลังสินค้า'},{x:4,y:17.6,t:'วัตถุดิบ'}],
+  st:{RM:{x:2,y:14,n:'คลังวัตถุดิบ'},FG:{x:46,y:14,n:'คลังสินค้าสำเร็จรูป'},I1:{x:9,y:5,n:'ต้นสาย 1'},I2:{x:9,y:13,n:'ต้นสาย 2'},I3:{x:9,y:21,n:'ต้นสาย 3'},
+   O1:{x:37,y:5,n:'ปลายสาย 1'},O2:{x:37,y:13,n:'ปลายสาย 2'},O3:{x:37,y:21,n:'ปลายสาย 3'},QC:{x:24,y:26,n:'ห้องตรวจคุณภาพ'}},
+  ch:[{x:2,y:2},{x:2,y:26},{x:24,y:1},{x:20,y:27},{x:45,y:2},{x:24,y:9}],
+  flows:[['RM','I1',3,'ส่งวัตถุดิบเข้าสาย'],['RM','I2',3,'ส่งวัตถุดิบเข้าสาย'],['RM','I3',3,'ส่งวัตถุดิบเข้าสาย'],['O1','FG',3,'ส่งสินค้าเข้าคลัง'],['O2','FG',3,'ส่งสินค้าเข้าคลัง'],['O3','FG',3,'ส่งสินค้าเข้าคลัง'],['O1','QC',1,'ส่งตัวอย่างตรวจ'],['O2','QC',1,'ส่งตัวอย่างตรวจ'],['O3','QC',1,'ส่งตัวอย่างตรวจ']],
+  desc:'โรงงาน 48 × 28 ม. สายการผลิต 3 สายยาว 26 ม. คลังวัตถุดิบอยู่ซ้าย คลังสินค้าสำเร็จรูปอยู่ขวาหลังผนังที่มีประตูกลาง ห้องตรวจคุณภาพอยู่ด้านล่าง',
+  look:'งานแบ่งเป็นสองฝั่งชัดเจน ฝั่งซ้ายส่งวัตถุดิบเข้าต้นสาย ฝั่งขวาขนสินค้าจากปลายสาย ดูว่าหุ่นต้องวิ่งกลับข้ามโรงงานบ่อยแค่ไหน'}
+};
+const AREAS=MAPS.plain.st,CHS=MAPS.plain.ch;
+const NB=[[1,0],[-1,0],[0,1],[0,-1]];
+const idx=(m,x,y)=>y*(m.w+1)+x;
+function prep(m){if(m._free)return;const N=(m.w+1)*(m.h+1);m._free=new Uint8Array(N);m._f={};
+ for(let y=0;y<=m.h;y++)for(let x=0;x<=m.w;x++){let ok=1;for(const [wx,wy,ww,wh] of m.walls)if(x>=wx&&x<=wx+ww&&y>=wy&&y<=wy+wh){ok=0;break;}m._free[idx(m,x,y)]=ok;}}
+function bfs(m,p){prep(m);const D=new Int32Array((m.w+1)*(m.h+1)).fill(-1),q=[p.x,p.y];D[idx(m,p.x,p.y)]=0;let h=0;
+ while(h<q.length){const x=q[h++],y=q[h++],d=D[idx(m,x,y)];for(const [dx,dy] of NB){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>m.w||ny>m.h)continue;const j=idx(m,nx,ny);if(!m._free[j]||D[j]>=0)continue;D[j]=d+1;q.push(nx,ny);}}
+ return D;}
+function fieldOf(m,key){prep(m);if(!m._f[key])m._f[key]=bfs(m,key.startsWith('CH')?m.ch[+key.slice(2)]:m.st[key]);return m._f[key];}
+function dist(m,key,p){const v=fieldOf(m,key)[idx(m,p.x,p.y)];return v<0?Infinity:v;}
+function isFree(m,x,y){prep(m);return x>=0&&y>=0&&x<=m.w&&y<=m.h&&m._free[idx(m,x,y)]===1;}
+const STRAT=[{id:'fifo',name:'FIFO + ใกล้สุด'},{id:'rules',name:'กฎทีละขั้น'},{id:'cost',name:'Cost function'},{id:'hung',name:'Hungarian'}];
+const f3=v=>v.toFixed(3);
+function newSim(sc,strat,w,opt){
+ opt=opt||{};const map=MAPS[sc.map||'plain'];prep(map);
+ const chs=map.ch.slice(0,opt.chargers||1).map((p,i)=>({x:p.x,y:p.y,key:'CH'+i,busy:null,q:[],tU:0}));
+ const chF=new Float64Array((map.w+1)*(map.h+1)).fill(Infinity);for(const c of chs){const F=fieldOf(map,c.key);for(let j=0;j<F.length;j++)if(F[j]>=0&&F[j]<chF[j])chF[j]=F[j];}
+ return {sc,strat,map,chF,w:w||[.6,.3,.1],t:0,done:false,log:[],charge:!!opt.charge,use:opt.use||SIM.USE,chs,tmax:opt.tmax||SIM.TMAX,quiet:!!opt.quiet,chq:[],charges:0,
+  robots:sc.robots.map(r=>({id:r.id,x:r.x,y:r.y,soc:r.soc,idle0:r.idle,idleSince:0,state:'idle',task:null,dist:0,until:0,tB:0,tC:0,tI:0})),
+  tasks:sc.tasks.map(k=>({...k,state:'future',robot:null,startT:null,doneT:null}))};
+}
+function eta(s,r,k){return dist(s.map,k.area,r)/SIM.SPEED}
+function nearCh(s,p){return s.chF[idx(s.map,p.x,p.y)]}
+function legLen(s,k){return k.to?dist(s.map,k.to,s.map.st[k.area]):0}
+function feasible(s,r,k){const last=s.map.st[k.to||k.area];return r.soc-(dist(s.map,k.area,r)+legLen(s,k)+nearCh(s,last))*s.use>=SIM.RESERVE}
+function idleFor(s,r){return r.idle0+(s.t-r.idleSince)}
+function byQueue(s,list){
+ if(s.strat==='fifo')return list.sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id));
+ return list.sort((a,b)=>b.pri-a.pri||a.at-b.at||a.id.localeCompare(b.id));
+}
+function ruleBetter(s,a,b,k){
+ const ea=eta(s,a,k),eb=eta(s,b,k);
+ if(Math.abs(ea-eb)>SIM.TOL)return ea<eb?[true,'ETA']:[false,'ETA'];
+ if(a.soc!==b.soc)return [a.soc>b.soc,'แบต'];
+ const ia=idleFor(s,a),ib=idleFor(s,b);
+ if(ia!==ib)return [ia>ib,'เวลาว่าง'];
+ return [a.id<b.id,'รหัสหุ่น'];
+}
+function costOf(s,cands,k){
+ const mE=Math.max(...cands.map(r=>eta(s,r,k)))||1,mI=Math.max(...cands.map(r=>idleFor(s,r)))||1,w=s.w;
+ return cands.map(r=>({r,c:w[0]*eta(s,r,k)/mE+w[1]*(1-r.soc/100)+w[2]*(1-idleFor(s,r)/mI)}));
+}
+function dispatch(s){
+ const pend=byQueue(s,s.tasks.filter(k=>k.state==='waiting'));
+ let idle=s.robots.filter(r=>r.state==='idle');
+ const out=[];
+ if(!pend.length||!idle.length)return out;
+ if(s.strat==='hung'){
+  const ks=pend.filter(k=>idle.some(r=>feasible(s,r,k))).slice(0,idle.length);let best={c:Infinity,a:[]};
+  const rec=(i,used,c,a)=>{
+   if(c>=best.c)return;
+   if(i===ks.length){best={c,a:a.slice()};return;}
+   let any=false;
+   for(const r of idle){if(used.has(r.id)||!feasible(s,r,ks[i]))continue;any=true;used.add(r.id);a.push([ks[i],r]);rec(i+1,used,c+eta(s,r,ks[i]),a);a.pop();used.delete(r.id);}
+   rec(i+1,used,c+1e6,a);
+  };
+  rec(0,new Set(),0,[]);
+  for(const [k,r] of best.a)out.push([k,r,'จับคู่ทั้งชุด ETA รวม '+best.a.reduce((x,[kk,rr])=>x+eta(s,rr,kk),0)+' วิ']);
+  return out;
+ }
+ for(const k of pend){
+  let c=s.strat==='fifo'?idle.slice():idle.filter(r=>feasible(s,r,k));
+  if(!c.length)continue;
+  let pick,why;
+  if(s.strat==='fifo'){
+   c.sort((a,b)=>eta(s,a,k)-eta(s,b,k)||a.id.localeCompare(b.id));pick=c[0];why='ใกล้สุด ETA '+eta(s,pick,k)+' วิ';
+  }else if(s.strat==='rules'){
+   pick=c[0];let stage='มีตัวเดียว';
+   for(const r of c.slice(1)){const [b]=ruleBetter(s,r,pick,k);if(b)pick=r;}
+   const rest=c.filter(r=>r!==pick);
+   if(rest.length){const run=rest.reduce((x,r)=>ruleBetter(s,r,x,k)[0]?r:x);stage='ตัดสินที่เกณฑ์ '+ruleBetter(s,pick,run,k)[1]+' (เทียบ '+run.id+')';}
+   why=stage;
+  }else{
+   const cs=costOf(s,c,k).sort((a,b)=>a.c-b.c||a.r.id.localeCompare(b.r.id));pick=cs[0].r;
+   why='cost '+cs.map(x=>x.r.id+' '+f3(x.c)).join(', ');
+  }
+  out.push([k,pick,why]);idle=idle.filter(r=>r!==pick);
+  if(!idle.length)break;
+ }
+ return out;
+}
+function advance(s,r,dt){
+ const m=s.map,F=fieldOf(m,r.goalKey);let rem=SIM.SPEED*dt;
+ while(rem>1e-9){
+  if(!r.nxt){const i=idx(m,r.x,r.y);if(F[i]<=0)break;let b=null;
+   for(const [dx,dy] of NB){const nx=r.x+dx,ny=r.y+dy;if(nx<0||ny<0||nx>m.w||ny>m.h)continue;if(F[idx(m,nx,ny)]===F[i]-1){b={x:nx,y:ny};break;}}
+   if(!b)break;r.nxt=b;}
+  const dx=r.nxt.x-r.x,dy=r.nxt.y-r.y,d=Math.min(rem,Math.abs(dx)+Math.abs(dy));
+  r.x+=Math.sign(dx)*d;r.y+=Math.sign(dy)*d;rem-=d;r.dist+=d;r.soc-=d*s.use;
+  if(Math.abs(r.x-r.nxt.x)<1e-9&&Math.abs(r.y-r.nxt.y)<1e-9){r.x=r.nxt.x;r.y=r.nxt.y;r.nxt=null;}
+  if(r.soc<=1e-9){r.soc=0;break;}
+ }
+}
+function pathOf(s,r){
+ const m=s.map,F=fieldOf(m,r.goalKey),pts=[[r.x,r.y]];let p=r.nxt?{...r.nxt}:{x:r.x,y:r.y};if(r.nxt)pts.push([p.x,p.y]);
+ for(let g=0;g<400;g++){const i=idx(m,p.x,p.y);if(F[i]<=0)break;let b=null;for(const [dx,dy] of NB){const nx=p.x+dx,ny=p.y+dy;if(nx<0||ny<0||nx>m.w||ny>m.h)continue;if(F[idx(m,nx,ny)]===F[i]-1){b={x:nx,y:ny};break;}}if(!b)break;p=b;pts.push([p.x,p.y]);}
+ return pts;
+}
+function L(s,t,m){if(!s.quiet)s.log.push([t,m]);}
+function step(s){
+ if(s.done)return;
+ for(const k of s.tasks)if(k.state==='future'&&k.at<=s.t+1e-9){k.state='waiting';L(s,s.t,k.id+(k.pri>1?' (ด่วน)':'')+' เข้าคิว → '+k.area+(k.to?' ส่งที่ '+k.to:''));}
+ const goCharge=(r,why)=>{r.ch=s.chs.map((c,i)=>i).reduce((a,i)=>dist(s.map,s.chs[i].key,r)<dist(s.map,s.chs[a].key,r)?i:a,0);
+  r.state='toCharge';r.goal=s.chs[r.ch];r.goalKey=s.chs[r.ch].key;r.nxt=null;L(s,s.t,r.id+' แบต '+r.soc.toFixed(0)+'% ไปชาร์จ · '+why);};
+ if(s.charge)for(const r of s.robots)if(r.state==='idle'&&r.soc<SIM.CHG_LOW)goCharge(r,'ต่ำกว่า '+SIM.CHG_LOW+'%');
+ for(const [k,r,why] of dispatch(s)){
+  k.state='assigned';k.robot=r.id;r.state='moving';r.task=k;r.leg=0;r.goal=s.map.st[k.area];r.goalKey=k.area;r.nxt=null;
+  L(s,s.t,k.id+' → '+r.id+' · '+why);
+ }
+ if(s.charge){const wt=s.tasks.filter(k=>k.state==='waiting');
+  if(wt.length)for(const r of s.robots)if(r.state==='idle'&&r.soc<SIM.CHG_FULL&&!wt.some(k=>feasible(s,r,k)))goCharge(r,'แบตไม่พอรับงานที่รออยู่');}
+ const t1=s.t+SIM.DT;
+ for(const r of s.robots){
+  if(r.state==='moving'||r.state==='service')r.tB+=SIM.DT;else if(r.state==='idle')r.tI+=SIM.DT;else if(r.state!=='dead')r.tC+=SIM.DT;
+  if(r.state==='moving'||r.state==='toCharge'){
+   const g=r.goal;advance(s,r,SIM.DT);
+   const at=!r.nxt&&r.x===g.x&&r.y===g.y;
+   if(r.soc<=1e-9&&!at){
+    if(r.task){r.task.state='failed';L(s,t1,r.id+' แบตหมดกลางทาง · '+r.task.id+' ล้มเหลว');}else L(s,t1,r.id+' แบตหมดก่อนถึงแท่นชาร์จ');
+    r.state='dead';r.task=null;
+   }else if(at&&r.state==='moving'){r.state='service';r.until=t1+SIM.SERVICE;if(r.leg===0){r.task.state='service';r.task.startT=t1;L(s,t1,r.id+' ถึง '+r.task.area+' · '+r.task.id+' รอ '+(t1-r.task.at)+' วิ');}else L(s,t1,r.id+' ส่ง '+r.task.id+' ถึง '+r.task.to);}
+   else if(at){s.charges++;const c=s.chs[r.ch];if(c.busy){r.state='chargeWait';c.q.push(r);L(s,t1,r.id+' รอคิวแท่นชาร์จ');}else{c.busy=r;r.state='charging';L(s,t1,r.id+' เริ่มชาร์จ');}}
+  }else if(r.state==='service'&&t1>=r.until-1e-9){
+   if(r.task.to&&r.leg===0){r.leg=1;r.state='moving';r.goal=s.map.st[r.task.to];r.goalKey=r.task.to;r.nxt=null;L(s,t1,r.id+' รับ '+r.task.id+' แล้ว กำลังไปส่งที่ '+r.task.to);}
+   else{r.task.state='done';r.task.doneT=t1;L(s,t1,r.id+' ทำ '+r.task.id+' เสร็จ');r.task=null;r.state='idle';r.idleSince=t1;r.idle0=0;}
+  }else if(r.state==='charging'){
+   r.soc=Math.min(SIM.CHG_FULL,r.soc+SIM.CHG_RATE*SIM.DT);
+   if(r.soc>=SIM.CHG_FULL){r.state='idle';r.idleSince=t1;r.idle0=0;L(s,t1,r.id+' ชาร์จเต็ม');const c=s.chs[r.ch];c.busy=null;const n=c.q.shift();if(n){c.busy=n;n.state='charging';L(s,t1,n.id+' เริ่มชาร์จ');}}
+  }else if(r.state==='chargeWait'){r.waitChg=(r.waitChg||0)+SIM.DT;}
+ }
+ for(const c of s.chs)if(c.busy)c.tU+=SIM.DT;
+ s.t=t1;
+ if(s.tasks.every(k=>k.state==='done'||k.state==='failed')||s.t>=s.tmax)s.done=true;
+}
+function metrics(s){
+ const w=s.tasks.filter(k=>k.startT!==null).map(k=>k.startT-k.at);
+ const u=s.tasks.filter(k=>k.pri>1&&k.startT!==null).map(k=>k.startT-k.at);
+ const ws=w.slice().sort((a,b)=>a-b);
+ return {dist:s.robots.reduce((a,r)=>a+r.dist,0),avg:w.length?w.reduce((a,b)=>a+b,0)/w.length:null,max:w.length?Math.max(...w):null,
+  p95:ws.length?ws[Math.min(ws.length-1,Math.ceil(ws.length*0.95)-1)]:null,
+  urgent:u.length?Math.max(...u):null,urgentAvg:u.length?u.reduce((a,b)=>a+b,0)/u.length:null,
+  failed:s.tasks.filter(k=>k.state!=='done').length,end:Math.max(0,...s.tasks.map(k=>k.doneT||0)),
+  n:s.tasks.length,charges:s.charges,chUtil:s.chs.reduce((a,c)=>a+c.tU,0)/(s.chs.length*Math.max(s.t,1))*100,busy:(()=>{const T=s.robots.reduce((a,r)=>a+r.tB+r.tC+r.tI,0)||1;return s.robots.reduce((a,r)=>a+r.tB,0)/T*100;})(),chgPct:(()=>{const T=s.robots.reduce((a,r)=>a+r.tB+r.tC+r.tI,0)||1;return s.robots.reduce((a,r)=>a+r.tC,0)/T*100;})(),chgWait:s.robots.reduce((a,r)=>a+(r.waitChg||0),0)};
+}
+function runAll(sc,strat,w,opt){const s=newSim(sc,strat,w,opt);while(!s.done)step(s);return s;}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function genScen(seed,n,gap,urg,nr,mapId){
+ if(mapId&&mapId!=='plain')return genVenue(seed,n,gap,urg,nr,mapId);
+ nr=nr||3;const R=rng(seed),R2=rng(seed*7919+17),ar=['A','B','C','D'],robots=[],tasks=[];let t=0;
+ const mk=(G,i)=>({id:'R'+(i+1),x:2*Math.floor(G()*21),y:2*Math.floor(G()*13),soc:50+Math.round(G()*50),idle:Math.round(G()*300)});
+ for(let i=0;i<3;i++){const r=mk(R,i);if(i<nr)robots.push(r);}
+ for(let i=3;i<nr;i++)robots.push(mk(R2,i));
+ for(let i=0;i<n;i++){tasks.push({id:'T'+(i+1),area:ar[Math.floor(R()*4)],at:t,pri:R()<urg?2:1});t+=Math.round(-Math.log(1-R())*gap*2)/2;}
+ return {id:'mc'+seed,robots,tasks};
+}
+function genVenue(seed,n,gap,urg,nr,mapId){
+ nr=nr||3;const m=MAPS[mapId];prep(m);const R=rng(seed),R2=rng(seed*7919+17),robots=[],tasks=[];let t=0;
+ const F0=fieldOf(m,Object.keys(m.st)[0]);
+ const mk=(G,i)=>{let x,y,g=0;do{x=Math.floor(G()*(m.w+1));y=Math.floor(G()*(m.h+1));g++;}while((!isFree(m,x,y)||F0[idx(m,x,y)]<0)&&g<500);return {id:'R'+(i+1),x,y,soc:50+Math.round(G()*50),idle:Math.round(G()*300)};};
+ for(let i=0;i<3;i++){const r=mk(R,i);if(i<nr)robots.push(r);}
+ for(let i=3;i<nr;i++)robots.push(mk(R2,i));
+ const tot=m.flows.reduce((a,f)=>a+f[2],0);
+ for(let i=0;i<n;i++){let u=R()*tot,f=m.flows[0];for(const x of m.flows){if(u<x[2]){f=x;break;}u-=x[2];}
+  const k={id:'T'+(i+1),area:f[0],at:t,pri:R()<urg?2:1,kind:f[3]};if(f[1])k.to=f[1];tasks.push(k);t+=Math.round(-Math.log(1-R())*gap*2)/2;}
+ return {id:mapId+seed,map:mapId,robots,tasks};
+}
+function monteCarlo(o,w){
+ const out={};for(const st of STRAT)out[st.id]=[];
+ for(let i=0;i<o.runs;i++){const sc=genScen(o.seed+i,o.n,o.gap,o.urg,o.robots,o.map);
+  for(const st of STRAT)out[st.id].push(metrics(runAll(sc,st.id,w,{charge:true,quiet:true,use:o.use,chargers:o.chargers,tmax:o.n*o.gap*6+2000})));}
+ return out;
+}
+function summarize(out){
+ const res={},ids=Object.keys(out),n=out[ids[0]].length,wins={};ids.forEach(id=>wins[id]=0);
+ for(let i=0;i<n;i++){const m=Math.min(...ids.map(id=>out[id][i].avg??Infinity));ids.filter(id=>(out[id][i].avg??Infinity)-m<1e-9).forEach(id=>wins[id]++);}
+ for(const id of ids){const a=out[id],mean=f=>{const v=a.map(f).filter(x=>x!==null);return v.length?v.reduce((x,y)=>x+y,0)/v.length:null;};
+  const av=a.map(m=>m.avg).filter(x=>x!==null),mu=mean(m=>m.avg),sd=Math.sqrt(av.reduce((x,y)=>x+(y-mu)**2,0)/Math.max(1,av.length-1));
+  res[id]={avg:mu,ci:1.96*sd/Math.sqrt(Math.max(1,av.length)),p95:mean(m=>m.p95),urgentAvg:mean(m=>m.urgentAvg),distPer:mean(m=>m.dist/m.n),
+   failed:mean(m=>m.failed),charges:mean(m=>m.charges),chgWait:mean(m=>m.chgWait),busy:mean(m=>m.busy),chUtil:mean(m=>m.chUtil),chgPct:mean(m=>m.chgPct),wins:wins[id]};}
+ return res;
+}
+function sweep(o,w,strat,configs){
+ return configs.map(([nr,nc])=>{const a=[];
+  for(let i=0;i<o.runs;i++){const sc=genScen(o.seed+i,o.n,o.gap,o.urg,nr,o.map);a.push(metrics(runAll(sc,strat,w,{charge:true,quiet:true,use:o.use,chargers:nc,tmax:o.n*o.gap*6+2000})));}
+  return {nr,nc,...summarize({x:a}).x};});
+}
+if(typeof module!=='undefined')module.exports={SIM,AREAS,SCEN,STRAT,MAPS,newSim,step,metrics,runAll,genScen,monteCarlo,summarize,sweep,CHS,dist,isFree,fieldOf,pathOf,prep};
+
+const $=id=>document.getElementById(id);
+const COL={R1:'var(--r1)',R2:'var(--r2)',R3:'var(--r3)',R4:'var(--r4)',R5:'var(--r5)',R6:'var(--ink)'};
+const ST_TH={idle:'ว่าง',moving:'กำลังไป',service:'กำลังทำงาน',dead:'แบตหมด',toCharge:'กำลังไปแท่นชาร์จ',chargeWait:'รอคิวแท่นชาร์จ',charging:'กำลังชาร์จ'};
+let sc=SCEN[0],st='rules',sim,playing=false,acc=0,last=0,curMap='plain';
+const weights=()=>{const r=[0,1,2].map(i=>+$('w'+i).value),s=r.reduce((a,b)=>a+b,0);return s?r.map(v=>v/s):null;};
+function seg(el,items,cur,fn){el.innerHTML=items.map(x=>`<button data-id="${x.id}" aria-pressed="${x.id===cur}">${x.short||x.name}</button>`).join('');el.onclick=e=>{const b=e.target.closest('button');if(b)fn(b.dataset.id);};}
+function buttons(){seg($('scBtns'),SCEN,sc.id,id=>{sc=SCEN.find(x=>x.id===id);reset();buttons();});seg($('stBtns'),STRAT,st,id=>{st=id;reset();buttons();});
+ seg($('mapBtns'),Object.values(MAPS),curMap,id=>{curMap=id;$('mGap').value=MAPS[id].gap;$('vGap').textContent=MAPS[id].gap+' วิ';openRun();buttons();sAuto=true;$('mGo').click();});}
+function drawMap(){
+ const m=sim.map,W=m.w,H=m.h;$('map').setAttribute('viewBox',`-2 -3 ${W+4} ${H+5}`);
+ let h=`<rect x="0" y="0" width="${W}" height="${H}" rx="0.6" fill="var(--floor)" stroke="var(--line)" stroke-width="0.12"/>`;
+ for(let x=2;x<W;x+=2)h+=`<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="var(--grid)" stroke-width="0.08"/>`;
+ for(let y=2;y<H;y+=2)h+=`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="var(--grid)" stroke-width="0.08"/>`;
+ for(const [x,y,w,hh] of m.walls){const x0=Math.max(0,x-0.5),y0=Math.max(0,y-0.5),x1=Math.min(W,x+w+0.5),y1=Math.min(H,y+hh+0.5);h+=`<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" rx="0.3" fill="var(--wall)"/>`;}
+ for(const z of m.zones)h+=`<text x="${z.x}" y="${z.y}" text-anchor="middle" font-size="1.25" fill="var(--mute)">${z.t}</text>`;
+ for(const r of sim.robots)if((r.state==='moving'||r.state==='toCharge')&&r.goalKey)h+=`<polyline points="${pathOf(sim,r).map(p=>p.join(',')).join(' ')}" fill="none" stroke="${COL[r.id]}" stroke-width="0.22" stroke-dasharray="0.6 0.45" stroke-linejoin="round"/>`;
+ const big=m.id==='plain';
+ for(const [k,a] of Object.entries(m.st).concat(sim.chs.map(c=>['CH',c]))){
+  const ch=k==='CH',busy=sim.tasks.some(t=>(t.area===k&&(t.state==='waiting'||t.state==='assigned'||t.state==='service'))||(t.to===k&&t.state==='service')),bs=big?3.6:2.6,fs=big?2:k.length>2?1.05:1.3;
+  h+=`<rect x="${a.x-bs/2}" y="${a.y-bs/2}" width="${bs}" height="${bs}" rx="0.4" fill="${ch?'var(--grid)':'var(--pane)'}" stroke="${busy?'var(--ink)':'var(--line)'}" stroke-width="${busy?0.22:0.12}"/>`;
+  h+=`<text x="${a.x}" y="${a.y+fs*0.36}" text-anchor="middle" font-size="${fs}" font-weight="600" fill="var(--ink)">${ch?'⚡':k}</text>`;
+  const q=sim.tasks.filter(t=>t.area===k&&(t.state==='waiting'||t.state==='assigned'));
+  const qq=q.length>3?q.slice(0,2).concat([{id:'+'+(q.length-2),pri:q.slice(2).some(t=>t.pri>1)?2:1}]):q;
+  qq.forEach((t,i)=>{const tx=a.x>W-8?a.x-bs/2-3.1:a.x+bs/2+0.4,ty=Math.min(H-1.8,Math.max(0,a.y-bs/2))+i*2.1;
+   h+=`<rect x="${tx}" y="${ty}" width="2.8" height="1.8" rx="0.4" fill="${t.pri>1?'var(--red)':'var(--ink)'}"/><text x="${tx+1.4}" y="${ty+1.3}" text-anchor="middle" font-size="1.1" fill="${t.pri>1?'#fff':'var(--pane)'}">${t.id}</text>`;});
+ }
+ const grp={};for(const r of sim.robots)(grp[r.x+','+r.y]=grp[r.x+','+r.y]||[]).push(r);
+ for(const r0 of sim.robots){
+  const g=grp[r0.x+','+r0.y],dx=(g.indexOf(r0)-(g.length-1)/2)*2.9,r={...r0,x:r0.x+dx};
+  const dead=r.state==='dead',carry=r.state!=='dead'&&r.task&&r.leg===1;
+  h+=`<circle cx="${r.x}" cy="${r.y}" r="1.35" fill="${dead?'var(--pane)':COL[r.id]}" stroke="${dead?'var(--red)':carry?'var(--ink)':'var(--pane)'}" stroke-width="${carry?0.4:0.25}"/>`;
+  if(dead)h+=`<path d="M${r.x-0.6} ${r.y-0.6}L${r.x+0.6} ${r.y+0.6}M${r.x+0.6} ${r.y-0.6}L${r.x-0.6} ${r.y+0.6}" stroke="var(--red)" stroke-width="0.28"/>`;
+  const ly=r.y<2.5?r.y+3.4:r.y-1.9;
+  h+=`<text x="${r.x}" y="${ly}" text-anchor="middle" font-size="1.8" font-weight="600" fill="${dead?'var(--red)':COL[r.id]}">${r.id}</text>`;
+ }
+ h+=`<text x="0" y="-1" font-size="1.5" fill="var(--mute)">${m.short} ${W} × ${H} ม. · ⚡ แท่นชาร์จ</text>`;
+ $('map').innerHTML=h;
+}
+function drawSide(){
+ $('robs').innerHTML=sim.robots.map(r=>{
+  const s=r.state==='moving'?(r.leg===1?`กำลังไปส่งที่ ${r.task.to} (${r.task.id})`:r.task.to?`กำลังไปรับที่ ${r.task.area} (${r.task.id})`:`กำลังไป ${r.task.area} (${r.task.id})`):r.state==='service'?(r.leg===1?`กำลังส่ง ${r.task.id}`:r.task.to?`กำลังรับ ${r.task.id}`:`กำลังทำ ${r.task.id}`):ST_TH[r.state];
+  const c=r.soc<20?'var(--red)':COL[r.id];
+  return `<div class="rob"><div class="dot" style="background:${r.state==='dead'?'var(--red)':COL[r.id]}">${r.id}</div><div class="st">${s}</div><div class="num">แบต ${r.soc.toFixed(0)}% · ${r.dist.toFixed(0)} ม.</div><div class="soc"><i style="width:${Math.max(0,r.soc)}%;background:${c}"></i></div></div>`;
+ }).join('');
+ $('log').innerHTML=sim.log.slice(-200).reverse().map(([t,m])=>`<li><b>${t.toFixed(1)} วิ</b><span class="${/แบตหมด|ล้มเหลว/.test(m)?'bad':''}">${m}</span></li>`).join('')||'<li><b>0 วิ</b><span>กดเล่นหรือทีละขั้นเพื่อเริ่ม</span></li>';
+ $('clock').innerHTML=`${sim.t.toFixed(1)} <small>วินาที${sim.done?' · จบ':''}</small>`;
+}
+function render(){drawMap();drawSide();}
+function compare(){
+ const w=weights()||[.6,.3,.1];
+ const rows=STRAT.map(s=>({s,m:metrics(runAll(sc,s.id,w,sc.opt))}));
+ const keys=['dist','avg','max','urgent','failed','end'];
+ const best={};for(const k of keys){const v=rows.filter(r=>r.m.failed===0||k==='failed').map(r=>r.m[k]).filter(v=>v!==null);best[k]=v.length?Math.min(...v):null;}
+ const fmt=(v,k,m)=>v===null||(k==='end'&&m.failed>0)?'–':k==='avg'?v.toFixed(1):v.toFixed(0);
+ $('cmp').tBodies[0].innerHTML=rows.map(({s,m})=>`<tr class="${s.id===st?'cur':''}"><td>${s.name}</td>${keys.map(k=>{
+  const cls=k==='failed'&&m.failed>0?'fail':(m.failed===0||k==='failed')&&m[k]!==null&&m[k]===best[k]&&new Set(rows.map(r=>r.m[k])).size>1?'best':'';
+  return `<td class="${cls}">${fmt(m[k],k,m)}</td>`;}).join('')}</tr>`).join('');
+}
+function reset(){playing=false;$('play').textContent='▶ เล่น';$('play').setAttribute('aria-pressed','false');sim=newSim(sc,st,weights()||[.6,.3,.1],sc.opt);acc=0;
+ $('scName').textContent=sc.name;$('scDesc').textContent=sc.desc;$('scLook').textContent=sc.look;
+ const mm=MAPS[sc.map||'plain'];$('scLeg').textContent=mm.id==='plain'?'':'หุ่นที่มีขอบหนาคือกำลังถือของไปส่ง · จุดงาน: '+Object.entries(mm.st).map(([k,v])=>k+' = '+v.n).join(' · ')+(mm.flows?' · งาน: '+[...new Set(mm.flows.map(f=>f[3]))].join(', '):'');
+ render();compare();}
+function loop(ts){
+ if(!playing)return;
+ const dt=Math.min(0.1,(ts-last)/1000);last=ts;acc+=dt*(+$('spd').value);
+ while(acc>=SIM.DT&&!sim.done){step(sim);acc-=SIM.DT;}
+ render();
+ if(sim.done){playing=false;$('play').textContent='▶ เล่น';$('play').setAttribute('aria-pressed','false');return;}
+ requestAnimationFrame(loop);
+}
+$('play').onclick=()=>{
+ if(sim.done)reset();
+ playing=!playing;$('play').textContent=playing?'❚❚ หยุด':'▶ เล่น';$('play').setAttribute('aria-pressed',String(playing));
+ if(playing){last=performance.now();requestAnimationFrame(loop);}
+};
+$('stepB').onclick=()=>{playing=false;$('play').textContent='▶ เล่น';$('play').setAttribute('aria-pressed','false');
+ if(sim.done)return;const n=sim.log.length;let g=0;do{step(sim);g++;}while(sim.log.length===n&&!sim.done&&g<400);render();};
+$('reset').onclick=reset;
+[0,1,2].forEach(i=>$('w'+i).addEventListener('input',()=>{
+ const w=weights();
+ if(!w){$('wErr').textContent='ตั้งน้ำหนักอย่างน้อย 1 เกณฑ์ให้มากกว่า 0';return;}
+ $('wErr').textContent='';[0,1,2].forEach(j=>$('o'+j).textContent=w[j].toFixed(2));
+ if(st==='cost')reset();else compare();
+}));
+const MP={mRuns:['vRuns',v=>v],mN:['vN',v=>v],mGap:['vGap',v=>v+' วิ'],mUrg:['vUrg',v=>v+'%'],mUse:['vUse',v=>(+v).toFixed(2)+'%/ม.'],mR:['vR',v=>v+' ตัว'],mC:['vC',v=>v+' แท่น']};
+for(const [id,[o,f]] of Object.entries(MP))$(id).addEventListener('input',()=>{$(o).textContent=f($(id).value);});
+const mOpt=()=>({runs:+$('mRuns').value,n:+$('mN').value,gap:+$('mGap').value,urg:+$('mUrg').value/100,use:+$('mUse').value,robots:+$('mR').value,chargers:+$('mC').value,map:curMap,seed:1});
+let mBusy=false,sAuto=true,mPend=false,sPend=false;
+function mRender(sum,o){
+ const M=[['avg','รอเฉลี่ย','วิ',1],['p95','รอ P95 (95% ของงานรอไม่เกินนี้)','วิ',0],['urgentAvg','รองานด่วนเฉลี่ย','วิ',1],['distPer','ระยะวิ่งต่องาน รวมไปชาร์จ','ม.',1],['failed','งานล้มเหลวต่อรอบ','งาน',2],['charges','จำนวนครั้งที่ไปชาร์จต่อรอบ','ครั้ง',1]];
+ let h=`<h2>${MAPS[o.map].name}: ผลเฉลี่ยจาก ${o.runs} รอบ × ${o.n} งาน · หุ่น ${o.robots} ตัว แท่นชาร์จ ${o.chargers} แท่น</h2>`;
+ for(const [k,lab,u,d] of M){
+  const vals=STRAT.map(s=>sum[s.id][k]).filter(v=>v!==null),mx=Math.max(...vals,1e-9),mn=Math.min(...vals);
+  h+=`<div class="metric"><h3>${lab}</h3>`+STRAT.map(s=>{const v=sum[s.id][k];const ci=k==='avg'?` ±${sum[s.id].ci.toFixed(0)}`:'';
+   return `<div class="mrow ${s.id}"><span>${s.name}</span><span class="tr"><i style="width:${!v?0:Math.max(1,v/mx*100)}%"></i></span><span class="v"${v!==null&&v===mn&&new Set(vals).size>1?' style="font-weight:600"':''}>${v===null?'–':v.toFixed(d)+ci} ${u}</span></div>`;}).join('')+`</div>`;
+ }
+ h+=`<p class="note" style="margin:0">± คือช่วงความเชื่อมั่น 95% ของค่าเฉลี่ย ถ้าช่วงของสองวิธีซ้อนกัน แปลว่ายังสรุปไม่ได้ว่าวิธีไหนดีกว่า · จำนวนรอบที่ได้รอเฉลี่ยต่ำสุด (นับรวมกรณีเสมอ): ${STRAT.map(s=>s.name+' '+sum[s.id].wins).join(' · ')}</p>`;
+ $('mOut').innerHTML=h;
+}
+$('mGo').onclick=()=>{
+ if(mBusy){mPend=true;return;}const w=weights();if(!w){$('mStat').textContent='ตั้งน้ำหนัก Cost function อย่างน้อย 1 เกณฑ์ก่อน';return;}
+ mBusy=true;$('mGo').textContent='กำลังรัน…';const o=mOpt(),out={};STRAT.forEach(s=>out[s.id]=[]);let i=0;const t0=performance.now();
+ const chunk=()=>{
+  const sc=genScen(o.seed+i,o.n,o.gap,o.urg,o.robots,o.map);
+  for(const s of STRAT)out[s.id].push(metrics(runAll(sc,s.id,w,{charge:true,quiet:true,use:o.use,chargers:o.chargers,tmax:o.n*o.gap*6+2000})));
+  i++;$('mProg').style.width=(i/o.runs*100)+'%';
+  if(i<o.runs){setTimeout(chunk,0);return;}
+  mBusy=false;$('mGo').textContent='รันการจำลอง';
+  $('mStat').textContent=`รันเสร็จใน ${((performance.now()-t0)/1000).toFixed(1)} วินาที · seed เริ่มที่ 1 ผลจึงเหมือนเดิมทุกครั้งที่ใช้ค่าเดิม`;
+  if(mPend){mPend=false;setTimeout(()=>$('mGo').click(),0);return;}
+  mRender(summarize(out),o);
+  if(sAuto){sAuto=false;$('sGo').click();}
+ };
+ chunk();
+};
+function openRun(scroll){
+ const o=mOpt(),g=genScen(o.seed,o.n,o.gap,o.urg,o.robots,o.map),mm=MAPS[o.map];
+ sc={...g,name:(mm.id==='plain'?'รอบสุ่มรอบที่ 1':mm.name+' · รอบสุ่มรอบที่ 1'),short:'สุ่ม',opt:{charge:true,use:o.use,chargers:o.chargers,tmax:o.n*o.gap*6+2000},
+  desc:(mm.id==='plain'?'':mm.desc+' ')+`รอบนี้มี ${o.n} งาน เข้ามาเฉลี่ยทุก ${o.gap} วินาที งานด่วน ${Math.round(o.urg*100)}% หุ่น ${o.robots} ตัว ใช้แบต ${o.use.toFixed(2)}% ต่อเมตร แท่นชาร์จ ${o.chargers} แท่น`,
+  look:mm.id==='plain'?'ลองเลือกความเร็ว 16× แล้วดูว่าหุ่นไปรอคิวแท่นชาร์จบ่อยแค่ไหน และงานที่จุด A (ไกลแท่นชาร์จที่สุด) ต้องรอนานกว่าจุดอื่นหรือไม่':mm.look};
+ reset();buttons();if(scroll)document.querySelector('.map').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('mOpen').onclick=()=>openRun(true);
+$('sMeth').innerHTML=STRAT.map(s=>`<option value="${s.id}"${s.id==='cost'?' selected':''}>${s.name}</option>`).join('');
+let sBusy=false;
+$('sGo').onclick=()=>{
+ if(sBusy){sPend=true;return;}const w=weights();if(!w){$('sStat').textContent='ตั้งน้ำหนัก Cost function ก่อน';return;}
+ sBusy=true;const o=mOpt(),m=$('sMeth').value,cf=[[3,1],[3,2],[3,3],[4,1],[4,2],[4,4],[5,1],[5,2],[5,5]],res=[];let i=0;$('sGo').textContent='กำลังรัน…';
+ const next=()=>{
+  res.push(sweep(o,w,m,[cf[i]])[0]);i++;$('sStat').textContent=`${i}/9 แบบ`;
+  if(i<cf.length){setTimeout(next,0);return;}
+  sBusy=false;$('sGo').textContent='เทียบ 9 แบบ';if(sPend){sPend=false;setTimeout(()=>$('sGo').click(),0);return;}$('sStat').textContent=`${MAPS[o.map].short} · ${o.runs} รอบ × ${o.n} งาน · งานเข้าทุก ${o.gap} วิ · ใช้แบต ${o.use.toFixed(2)}%/ม.`;
+  const b=res[0].avg,best=Math.min(...res.map(r=>r.avg));
+  $('sTab').tBodies[0].innerHTML=res.map(r=>`<tr><td>${r.nr} ตัว / ${r.nc} แท่น</td><td${r.avg===best?' class="best"':''}>${r.avg.toFixed(1)} ±${r.ci.toFixed(0)}</td><td>${r===res[0]?'–':((1-r.avg/b)*100).toFixed(0)+'%'}</td><td>${r.p95.toFixed(0)}</td><td>${r.urgentAvg===null?'–':r.urgentAvg.toFixed(1)}</td><td>${r.busy.toFixed(0)}%</td><td>${r.chgPct.toFixed(0)}%</td><td>${r.chUtil.toFixed(0)}%</td></tr>`).join('');
+  const add=(a,c)=>res.find(r=>r.nr===a&&r.nc===c);
+  const r31=add(3,1),r32=add(3,2),r41=add(4,1),g=n=>(add(n,2).avg-add(n,n).avg).toFixed(1);
+  $('sNote').textContent=`จาก 3 ตัว / 1 แท่น: เพิ่มแท่นที่ 2 ลดเวลารอเฉลี่ย ${(r31.avg-r32.avg).toFixed(0)} วินาที ส่วนเพิ่มหุ่น 1 ตัวลด ${(r31.avg-r41.avg).toFixed(0)} วินาที · จาก 2 แท่นเป็นเท่าจำนวนหุ่น ลดได้อีก ${g(3)} / ${g(4)} / ${g(5)} วินาที (หุ่น 3 / 4 / 5 ตัว) · "หุ่นทำงาน" ต่ำมากแปลว่าหุ่นว่างเกินจำเป็น ส่วน "แท่นชาร์จถูกใช้" คือเวลาที่แท่นมีหุ่นชาร์จอยู่เฉลี่ยต่อแท่น`;
+ };
+ next();
+};
+buttons();reset();$('mGo').click();
+}
+</script>
+</body>
+</html>
